@@ -14,6 +14,107 @@ class FpApi
     private $appSecret;
     private $baseUrl;
     private $client;
+    
+    /**
+     * 创建开票员
+     *
+     * @param string $drawer_name 开票员姓名
+     * @param string $id_number 身份证号码
+     * @param string $phone_number 手机号码
+     * @param string $login_pwd 税局登录密码
+     * @param string|null $queryStr 查询字符串(可选)
+     * @param int|null $timestamp 时间戳(可选)
+     * @param string|null $nonceStr 随机字符串(可选)
+     * @return array
+     * @throws GuzzleException
+     */
+    public function createDrawer(
+        string $drawer_name,
+        string $id_number,
+        string $phone_number,
+        string $login_pwd,
+        ?string $queryStr = '',
+        ?int $timestamp = null,
+        ?string $nonceStr = null
+    ) {
+        $timestamp = $timestamp ?? time();
+        $nonceStr = $nonceStr ?? $this->generateNonceStr();
+
+        $body = [
+            'drawer_name' => $drawer_name,
+            'id_number' => $id_number,
+            'phone_number' => $phone_number,
+            'login_pwd' => $login_pwd
+        ];
+
+        $headers = $this->generateSignature($queryStr, $body, $nonceStr, $timestamp);
+        $url = $this->baseUrl . '/' . $this->aid . '/drawers';
+
+        try {
+            $response = $this->client->request('POST', $url, [
+                'json' => $body,
+                'headers' => $headers,
+            ]);
+
+            $res = (string)$response->getBody();
+            return json_decode($res, true);
+        } catch (GuzzleException $e) {
+            throw $e;
+        }
+    }
+
+    /**
+     * 绑定开票员到企业
+     *
+     * @param string $company_id 企业ID
+     * @param string $login_account 法人/财务身份证号
+     * @param string $login_password 税局登录密码
+     * @param string $drawer_code 开票员编码
+     * @param int $need_consign_file 是否需要发票源文件(0/1)
+     * @param int $auto_renewal 是否自动续费(0/1)
+     * @param string|null $queryStr 查询字符串(可选)
+     * @param int|null $timestamp 时间戳(可选)
+     * @param string|null $nonceStr 随机字符串(可选)
+     * @return array
+     * @throws GuzzleException
+     */
+    public function bindDrawerToCompany(
+        string $company_id,
+        string $login_account,
+        string $login_password,
+        string $drawer_code,
+        int $need_consign_file = 0,
+        int $auto_renewal = 1,
+        ?string $queryStr = '',
+        ?int $timestamp = null,
+        ?string $nonceStr = null
+    ) {
+        $timestamp = $timestamp ?? time();
+        $nonceStr = $nonceStr ?? $this->generateNonceStr();
+
+        $body = [
+            'login_account' => $login_account,
+            'login_password' => $login_password,
+            'drawer_code' => $drawer_code,
+            'need_consign_file' => $need_consign_file,
+            'auto_renewal' => $auto_renewal
+        ];
+
+        $headers = $this->generateSignature($queryStr, $body, $nonceStr, $timestamp);
+        $url = $this->baseUrl . '/' . $this->aid . '/company/' . $company_id . '/add_drawer';
+
+        try {
+            $response = $this->client->request('POST', $url, [
+                'json' => $body,
+                'headers' => $headers,
+            ]);
+
+            $res = (string)$response->getBody();
+            return json_decode($res, true);
+        } catch (GuzzleException $e) {
+            throw $e;
+        }
+    }
 
     /**
      * 创建公司 API 请求。
@@ -25,21 +126,41 @@ class FpApi
      * @return array [httpCode, responseBody] HTTP 状态码和响应体
      * @throws GuzzleException
      */
-    public function createCompany(array $body, ?string $queryStr = '', ?int $timestamp = null, ?string $nonceStr = null) 
+    public function createCompany(array $body, ?string $queryStr = '', ?int $timestamp = null, ?string $nonceStr = null)
     {
         $timestamp = $timestamp ?? time();
         $nonceStr = $nonceStr ?? $this->generateNonceStr();
         $headers = $this->generateSignature($queryStr, $body, $nonceStr, $timestamp);
-
         $url = $this->baseUrl . '/' . $this->aid . '/companies';
-
         try {
             $response = $this->client->request('POST', $url, [
                 'json' => $body,
                 'headers' => $headers,
-            ]); 
-            $responseBody = (string) $response->getBody();
-            return $responseBody;
+            ]);
+            $res = (string) $response->getBody();
+            $res = json_decode($res, true);
+            return $res;
+        } catch (GuzzleException $e) {
+            throw $e;
+        }
+    }
+
+    /**
+     * 删除企业
+     */
+    public function deleteCompany($company_id)
+    {
+        $url = $this->baseUrl . '/' . $this->aid . '/company/' . $company_id;
+        /**
+         * DELETE请求
+         */
+        try {
+            $response = $this->client->request('DELETE', $url, [
+                'headers' => $this->generateSignature('', [], $this->generateNonceStr(), time()),
+            ]);
+            $res = (string) $response->getBody();
+            $res = json_decode($res, true);
+            return $res;
         } catch (GuzzleException $e) {
             throw $e;
         }
@@ -67,15 +188,19 @@ class FpApi
      * 生成 HMAC-SHA256 签名。
      *
      * @param string $queryStr 查询字符串
-     * @param array $body 请求体
+     * @param  $body 请求体
      * @param string $nonceStr 随机字符串
      * @param int $timestamp 时间戳
      * @return array 包含签名的请求头
      */
-    private function generateSignature(string $queryStr, array $body, string $nonceStr, int $timestamp): array
+    private function generateSignature(string $queryStr, $body, string $nonceStr, int $timestamp): array
     {
         $queryHash = hash_hmac('SHA256', $queryStr, $this->appSecret);
-        $bodyStr = json_encode($body);
+        if ($body) {
+            $bodyStr = json_encode($body);
+        } else {
+            $bodyStr = '';
+        }
         $bodyHash = hash_hmac('SHA256', $bodyStr, $this->appSecret);
 
         $originStr = "app_secret={$this->appSecret}\n"
@@ -105,7 +230,8 @@ class FpApi
         return substr(str_shuffle('1234567890abcdefghijklmnopqrstuvwxyz'), 0, $length);
     }
 
-    public function getArea($name = '上海'){
+    public function getAreaCode($name = '')
+    {
         $area = [
             "北京" => 1100,
             "天津" => 1200,
@@ -144,10 +270,9 @@ class FpApi
             "宁夏" => 6400,
             "新疆" => 6500
         ];
-        if($name)  {
-            return $area[$name]?? '';
+        if ($name) {
+            return $area[$name] ?? '';
         }
         return $area;
     }
-    
 }
