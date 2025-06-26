@@ -16,6 +16,102 @@ class FpApi
     private $client;
 
     /**
+     * 重发任务
+     * 
+     * 当出现验证码超时、人脸认证超时或其他情况时，允许通过此接口重新发起任务
+     *
+     * @param string $company_id 企业在平台对应的唯一标识
+     * @param string $task_id 任务唯一ID
+     * @param string|null $queryStr 查询字符串(可选)
+     * @param int|null $timestamp 时间戳(可选)
+     * @param string|null $nonceStr 随机字符串(可选)
+     * @return array
+     * @throws GuzzleException
+     */
+    public function restartTask(
+        string $company_id,
+        string $task_id,
+        ?string $queryStr = '',
+        ?int $timestamp = null,
+        ?string $nonceStr = null
+    ) {
+        $timestamp = $timestamp ?? time();
+        $nonceStr = $nonceStr ?? $this->generateNonceStr();
+
+        // 基本参数验证
+        if (empty($task_id)) {
+            throw new \Exception('任务ID不能为空');
+        }
+
+        // 空body，因为接口不需要请求体参数
+        $body = [];
+
+        $headers = $this->generateSignature($queryStr, $body, $nonceStr, $timestamp);
+        $url = $this->baseUrl . '/' . $this->aid . '/company/' . $company_id . '/task/' . $task_id . '/restart';
+
+        try {
+            $response = $this->client->request('POST', $url, [
+                'json' => $body,
+                'headers' => $headers,
+            ]);
+
+            $res = (string)$response->getBody();
+            return json_decode($res, true);
+        } catch (GuzzleException $e) {
+            throw $e;
+        }
+    }
+
+    /**
+     * 上传短信验证码
+     * 
+     * 用于除广东、浙江、湖北外的电子税局登录时的验证码上传
+     *
+     * @param string $company_id 企业在平台对应的唯一标识
+     * @param string $task_id 任务唯一ID
+     * @param string $captcha 短信验证码
+     * @param string|null $queryStr 查询字符串(可选)
+     * @param int|null $timestamp 时间戳(可选)
+     * @param string|null $nonceStr 随机字符串(可选)
+     * @return array
+     * @throws GuzzleException
+     */
+    public function uploadCaptcha(
+        string $company_id,
+        string $task_id,
+        string $captcha,
+        ?string $queryStr = '',
+        ?int $timestamp = null,
+        ?string $nonceStr = null
+    ) {
+        $timestamp = $timestamp ?? time();
+        $nonceStr = $nonceStr ?? $this->generateNonceStr();
+
+        // 验证码基础验证
+        if (empty($captcha)) {
+            throw new \Exception('验证码必须');
+        }
+
+        $body = [
+            'captcha' => $captcha
+        ];
+
+        $headers = $this->generateSignature($queryStr, $body, $nonceStr, $timestamp);
+        $url = $this->baseUrl . '/' . $this->aid . '/company/' . $company_id . '/task/' . $task_id . '/sms-code';
+
+        try {
+            $response = $this->client->request('POST', $url, [
+                'json' => $body,
+                'headers' => $headers,
+            ]);
+
+            $res = (string)$response->getBody();
+            return json_decode($res, true);
+        } catch (GuzzleException $e) {
+            throw $e;
+        }
+    }
+    /**
      * 开具发票
      *
      * @param string $company_id 企业在平台对应的唯一标识

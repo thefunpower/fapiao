@@ -123,6 +123,53 @@ https://fpapi.com/doc/#/page/hongChongFaPiao
 ~~~
 
 
+## 上传验证码示例
+
+~~~ 
+try {
+    $result = $api->uploadCaptcha(
+        'your_company_id',      // 企业ID
+        '5f8d7a4b2c6d1a3e4f5g6h7', // 任务ID（通常从任务回调或创建任务响应中获取）
+        '123456'               // 收到的短信验证码
+    );
+    
+    print_r($result);
+    /*
+    成功响应示例:
+    {
+        "code": 200,
+        "msg": "验证码上传成功"
+    }
+    */
+} catch (Exception $e) {
+    echo '验证码上传失败: ' . $e->getMessage();
+}
+~~~
+
+## 任务重发
+
+~~~
+// 重发任务示例
+try {
+    $result = $api->restartTask(
+        'your_company_id',      // 企业ID
+        '5f8d7a4b2c6d1a3e4f5g6h7' // 需要重发的任务ID
+    );
+    
+    print_r($result);
+    /*
+    成功响应示例:
+    {
+        "code": 200,
+        "msg": "任务已重新发起"
+    }
+    */
+} catch (Exception $e) {
+    echo '任务重发失败: ' . $e->getMessage();
+}
+~~~
+
+
 
 ### 开源协议 
 
