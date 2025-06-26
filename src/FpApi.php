@@ -25,7 +25,7 @@ class FpApi
      * @return array [httpCode, responseBody] HTTP 状态码和响应体
      * @throws GuzzleException
      */
-    public function createCompany(array $body, ?string $queryStr = '', ?int $timestamp = null, ?string $nonceStr = null): array
+    public function createCompany(array $body, ?string $queryStr = '', ?int $timestamp = null, ?string $nonceStr = null) 
     {
         $timestamp = $timestamp ?? time();
         $nonceStr = $nonceStr ?? $this->generateNonceStr();
@@ -37,10 +37,9 @@ class FpApi
             $response = $this->client->request('POST', $url, [
                 'json' => $body,
                 'headers' => $headers,
-            ]);
-            $httpCode = $response->getStatusCode();
+            ]); 
             $responseBody = (string) $response->getBody();
-            return [$httpCode, $responseBody];
+            return $responseBody;
         } catch (GuzzleException $e) {
             throw $e;
         }
