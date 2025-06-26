@@ -14,7 +14,158 @@ class FpApi
     private $appSecret;
     private $baseUrl;
     private $client;
-    
+
+    /**
+     * 开具发票
+     *
+     * @param string $company_id 企业在平台对应的唯一标识
+     * @param array $invoices 需要开具的发票列表
+     * @param string|null $queryStr 查询字符串(可选)
+     * @param int|null $timestamp 时间戳(可选)
+     * @param string|null $nonceStr 随机字符串(可选)
+     * @return array
+     * @throws GuzzleException
+     */
+    public function createInvoice(
+        string $company_id,
+        array $invoices,
+        ?string $queryStr = '',
+        ?int $timestamp = null,
+        ?string $nonceStr = null
+    ) {
+        $timestamp = $timestamp ?? time();
+        $nonceStr = $nonceStr ?? $this->generateNonceStr();
+
+        // 验证必填字段
+        foreach ($invoices as $invoice) {
+            if (!isset(
+                $invoice['custom_invoice_no'],
+                $invoice['invoice_type'],
+                $invoice['is_contain_tax'],
+                $invoice['buyer_type'],
+                $invoice['buyer_name'],
+                $invoice['buyer_email'],
+                $invoice['remark'],
+                $invoice['goods']
+            )) {
+                throw new \Exception('缺少必填发票字段');
+            }
+
+            // 如果是企业购方，必须提供税号
+            if ($invoice['buyer_type'] == 1 && !isset($invoice['buyer_tax_no'])) {
+                throw new \Exception('企业购方必须提供税号');
+            }
+
+            // 验证商品信息
+            foreach ($invoice['goods'] as $goods) {
+                if (!isset($goods['goods_name'], $goods['tax_scope_code'], $goods['amount'], $goods['tax_rate'])) {
+                    throw new \Exception('缺少必填商品字段');
+                }
+            }
+
+            // 特定业务类型验证
+            if (isset($invoice['specific_service_type'])) {
+                switch ($invoice['specific_service_type']) {
+                    case 2001: // 成品油
+                        foreach ($invoice['goods'] as $goods) {
+                            if (!isset($goods['unit'])) {
+                                throw new \Exception('成品油业务必须提供单位');
+                            }
+                        }
+                        break;
+                    case 2002: // 不动产经营租赁服务
+                        if (!isset($invoice['bdcjyzl_specific_service'])) {
+                            throw new \Exception('不动产经营租赁服务必须提供相关服务信息');
+                        }
+                        break;
+                    case 2003: // 货物运输服务
+                        if (!isset($invoice['hwysfw_specific_service'])) {
+                            throw new \Exception('货物运输服务必须提供相关服务信息');
+                        }
+                        break;
+                    case 2004: // 旅客运输服务
+                        if (!isset($invoice['lkysfw_specific_service'])) {
+                            throw new \Exception('旅客运输服务必须提供相关服务信息');
+                        }
+                        break;
+                }
+            }
+        }
+
+        $body = ['invoices' => $invoices];
+        $headers = $this->generateSignature($queryStr, $body, $nonceStr, $timestamp);
+        $url = $this->baseUrl . '/' . $this->aid . '/company/' . $company_id . '/invoicing';
+
+        try {
+            $response = $this->client->request('POST', $url, [
+                'json' => $body,
+                'headers' => $headers,
+            ]);
+
+            $res = (string)$response->getBody();
+            return json_decode($res, true);
+        } catch (GuzzleException $e) {
+            throw $e;
+        }
+    }
+
+    /**
+     * 红冲发票
+     *
+     * @param string $company_id 企业在平台对应的唯一标识
+     * @param string $electronic_invoice_no 需要红冲的全电发票号码
+     * @param string $draw_date 需要红冲的全电发票开具日期
+     * @param string $email 接收红冲发票的电子邮箱
+     * @param string|null $queryStr 查询字符串(可选)
+     * @param int|null $timestamp 时间戳(可选)
+     * @param string|null $nonceStr 随机字符串(可选)
+     * @return array
+     * @throws GuzzleException
+     */
+    public function reverseInvoice(
+        string $company_id,
+        string $electronic_invoice_no,
+        string $draw_date,
+        string $email,
+        ?string $queryStr = '',
+        ?int $timestamp = null,
+        ?string $nonceStr = null
+    ) {
+        $timestamp = $timestamp ?? time();
+        $nonceStr = $nonceStr ?? $this->generateNonceStr();
+
+        // 验证日期格式
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $draw_date)) {
+            throw new \Exception('日期格式不正确，请使用YYYY-MM-DD格式');
+        }
+
+        // 验证邮箱格式
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            throw new \Exception('邮箱格式不正确');
+        }
+
+        $body = [
+            'electronic_invoice_no' => $electronic_invoice_no,
+            'draw_date' => $draw_date,
+            'email' => $email
+        ];
+
+        $headers = $this->generateSignature($queryStr, $body, $nonceStr, $timestamp);
+        $url = $this->baseUrl . '/' . $this->aid . '/company/' . $company_id . '/invoice_offsetting';
+
+        try {
+            $response = $this->client->request('POST', $url, [
+                'json' => $body,
+                'headers' => $headers,
+            ]);
+
+            $res = (string)$response->getBody();
+            return json_decode($res, true);
+        } catch (GuzzleException $e) {
+            throw $e;
+        }
+    }
+
     /**
      * 创建开票员
      *
