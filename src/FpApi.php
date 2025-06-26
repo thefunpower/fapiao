@@ -6,7 +6,7 @@ use GuzzleHttp\Client;
 use GuzzleHttp\Exception\GuzzleException;
 
 /**
- * FpApi 类用于处理带有 HMAC-SHA256 签名认证的 API 请求。
+ * https://fpapi.com/ 
  */
 class FpApi
 {
