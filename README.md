@@ -9,6 +9,8 @@ https://fpapi.com/
 "thefunpower/fapiao": "dev-main"
 ~~~ 
 
+`data/code.xlsx` 是 税收编码表,一般财务知道自己的税收编码。
+
 ## 开具多张发票示例
  
 ~~~ 
