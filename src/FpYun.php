@@ -18,6 +18,7 @@ class FpYun
     public $appSecret = '';
     public $baseUrl = '';
     public $code = '';
+    public $requestId = '';
 
     private $client;
     public static $err = '';
@@ -28,6 +29,7 @@ class FpYun
 
     public function __construct()
     {
+        $this->requestId = time() . mt_rand(100000, 999999);
         $this->client = new Client([
             'timeout' => 10,
             'verify' => false,
@@ -49,7 +51,6 @@ class FpYun
      */
     public function query($serialNo, $saler_tax_no)
     {
-        $requestId = time();
         $url = $this->baseUrl . '/kapi/app/sim/openApi';
         $body = [
             'serialNo' => $serialNo,
@@ -61,7 +62,7 @@ class FpYun
                 'access_token' => $this->access_token,
             ],
             'json' => [
-                'requestId' => $requestId,
+                'requestId' => $this->requestId,
                 'businessSystemCode' => $this->code,
                 'interfaceCode' => 'ALLE.INVOICE.QUERY',
                 'data' => base64_encode(json_encode($body)),
@@ -71,7 +72,8 @@ class FpYun
         $res = json_decode($res, true);
         $message = $res['message'] ?? '';
         $status = $res['status'] ?? '';
-        pr($res);exit;
+        pr($res);
+        exit;
         if ($status == 1) {
             $this->serialNo = $res['data'] ?? '';
             return $this->serialNo;
@@ -91,59 +93,71 @@ class FpYun
      */
     public function createInvoice($invoices, $showMore = false)
     {
-        $requestId = time();
-        $this->getAccessToken();
         $url = $this->baseUrl . '/kapi/app/sim/openApi';
         foreach ($invoices as $invoice) {
             $new_goods = [];
             foreach ($invoice['goods'] as $goods) {
-                $lineProperty = 2;
+                /**
+                 * 行性质，0：正常商品行；1：折扣行[折扣行金额需为负数，它的上一行必须是被折扣行]；2：被折扣行[此商品行下一行必须是折扣行]【长度：2】
+                 */
+                $lineProperty = 2; 
                 $row = [
                     'goodsName' => $goods['goods_name'],
                     'specification' => $goods['model'] ?? '', //规格型号 
                     'quantity' => $goods['quantity'] ?? 1,
                     'price' => $goods['unit_price'] ?? '',
                     'taxRate' => $goods['tax_rate'] ?? '', //税率
-                    'units' => $goods['unit'] ?? '', //单位
-                    'detailId' => $goods['detail_id'] ?? '', //明细ID,必须
+                    'units' => $goods['unit'] ?? '', //单位 
                     'lineProperty' => $lineProperty, //行性质，1折扣行(折扣行必须紧跟被折扣的正常商品行)，2正常商品行 
-                ];
-                if ($showMore) {
-                    $row['privilegeContent'] = $goods['privilege_content'] ?? ''; //享受优惠内容，免税填免税，不征税填不征税，普通零税率填普通零税率【长度：50】
-                    $row['privilegeFlag'] = $goods['privilege_flag'] ?? ''; //是否享受优惠，0-不享受，1-享受【长度：1】
-                    $row['revenueCode'] = $goods['revenue_code'] ?? ''; //税收分类编码
-                }
+                    'amount' => $goods['amount']?? '', //金额 
+                   
+                ];  
+                $row['revenueCode'] = $goods['tax_scope_code']; //税收分类编码 
                 $new_goods[] = $row;
             }
-            $find = [
-                'billNo' => $invoice['custom_invoice_no'],
-                'billDate' => date('Y-m-d'),
-                'invoiceProperty' => 0, //0：蓝票；1：红票。不填默认蓝票
-                'invoiceType' => '08xdp', // 
-                'remark' => $invoice['remark'] ?? '',
+            $invoice_type = $invoice['invoice_type']?? '';
+            if ($invoice_type == '1') {
+                $invoice_type = '01'; //专票
+            } elseif ($invoice_type == '2') {
+                $invoice_type = '02'; //普票
+            }
+            $body = [
+                'serialNo' => $invoice['custom_invoice_no'], 
+                'invoiceType' => $invoice_type, // 01-数字化电子专票，02-数字化电子普票 
                 'buyerName' => $invoice['buyer_name'],
                 'buyerTaxpayerId' => $invoice['buyer_tax_no'] ?? '',
                 'sellerName' => $invoice['seller_name'] ?? '',
-                'sellerTaxpayerId' => $invoice['seller_tax_no'] ?? '',
-                'drawer' => $invoice['drawer'] ?? '', //开票人
-                'billDetail' => $new_goods,
+                'sellerTaxpayerId' => $invoice['seller_tax_no'] ?? '', 
+                'sellerBank'=> $invoice['seller_bank']?? '', // 收款银行
+                'sellerBankAccount'=> $invoice['seller_bank_account']?? '', // 收款银行账号
+                'sellerAddress'=> $invoice['seller_address']?? '', // 收款方地址
+                'invoiceDetail' => $new_goods,
+                'buyerTel'=> $goods['buyer_tel']?? '', //购买方电话
+                'buyerAddress'=> $goods['buyer_address']?? '', //购买方地址 
             ];
+            $drawer = $invoice['drawer']?? '';
+            if ($drawer) {
+                $body['drawer'] = $drawer; //开票人
+            }
+            $remark = $invoice['remark']?? '';
+            if ($remark) {
+                $body['remark'] = $remark;
+            }
             $reviewer = $invoice['reviewer'] ?? '';
             if ($reviewer) {
-                $find['reviewer'] = $reviewer; //复核人
-            }
-            $body[] = $find;
-        }
-
+                $body['reviewer'] = $reviewer; //复核人
+            } 
+        } 
+        
         $response = $this->client->request('POST', $url, [
             'headers' => [
                 'Content-Type' => 'application/json',
                 'access_token' => $this->access_token,
             ],
             'json' => [
-                'requestId' => $requestId,
+                'requestId' => $this->requestId,
                 'businessSystemCode' => $this->code,
-                'interfaceCode' => 'BILL.PUSH',
+                'interfaceCode' => 'ALLE.INVOICE.OPEN',
                 'data' => base64_encode(json_encode($body)),
             ]
         ]);
