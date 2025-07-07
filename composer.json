@@ -1,9 +1,9 @@
 {
     "name": "thefunpower/fapiao",
     "type": "library",
-    "description": "php fapiao library",
+    "description": "金蝶云发票、自开票 开票接口",
     "keywords": [
-        "php"
+       "金蝶云发票","自开票","发票"
     ],
     "license": "Apache-2.0",
     "authors": [
