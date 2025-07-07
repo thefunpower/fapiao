@@ -43,6 +43,55 @@ class FpYun
         }
     }
     /**
+     * 分页查寻发票
+     * https://piaozone-ultimate.apifox.cn/api-146003725
+     */
+    public function page($tax_no = '税号', $pageNo = 1, $pageSize = 1)
+    {
+        $url = $this->baseUrl . '/kapi/app/sim/openApi';
+        $body = [
+            'sellerTaxpayerId' => $tax_no,
+            'pageNo' => $pageNo - 1,
+            'pageSize' => $pageSize,
+        ];
+        $response = $this->client->request('POST', $url, [
+            'headers' => [
+                'Content-Type' => 'application/json',
+                'access_token' => $this->access_token,
+            ],
+            'json' => [
+                'requestId' => $this->requestId,
+                'businessSystemCode' => $this->code,
+                'interfaceCode' => 'ALLE.BATCH.QUERY',
+                'data' => base64_encode(json_encode($body)),
+            ]
+        ]);
+        $res = (string) $response->getBody();
+        $res = json_decode($res, true);
+        $message = $res['message'] ?? '';
+        $status = $res['status'] ?? '';
+        pr($res);
+        exit;
+        if ($status == 1) {
+            $data = $res['data'] ?? '';
+            $data = base64_decode($data);
+            $data = json_decode($data, true);
+            return [
+                'url' => $data['invoiceFileUrl'] ?? '',
+                'ofd' => $data['ofdFileUrl'] ?? '',
+                'xml' => $data['xmlFileUrl'] ?? '',
+                'invoice_number' => $data['invoiceNum'] ?? '',
+                'data' => $data,
+            ];
+        } else {
+            self::$err = $message;
+            if ($this->showErr) {
+                throw new \Exception(self::$err);
+            }
+            return false;
+        }
+    }
+    /**
      * 查询发票
      * https://piaozone-ultimate.apifox.cn/api-146003723
      * @param string $serialNo 流水号
@@ -72,11 +121,17 @@ class FpYun
         $res = json_decode($res, true);
         $message = $res['message'] ?? '';
         $status = $res['status'] ?? '';
-        pr($res);
-        exit;
         if ($status == 1) {
-            $this->serialNo = $res['data'] ?? '';
-            return $this->serialNo;
+            $data = $res['data'] ?? '';
+            $data = base64_decode($data);
+            $data = json_decode($data, true);
+            return [
+                'url' => $data['invoiceFileUrl'] ?? '',
+                'ofd' => $data['ofdFileUrl'] ?? '',
+                'xml' => $data['xmlFileUrl'] ?? '',
+                'invoice_number' => $data['invoiceNum'] ?? '',
+                'data' => $data,
+            ];
         } else {
             self::$err = $message;
             if ($this->showErr) {
@@ -100,7 +155,7 @@ class FpYun
                 /**
                  * 行性质，0：正常商品行；1：折扣行[折扣行金额需为负数，它的上一行必须是被折扣行]；2：被折扣行[此商品行下一行必须是折扣行]【长度：2】
                  */
-                $lineProperty = 2; 
+                $lineProperty = 2;
                 $row = [
                     'goodsName' => $goods['goods_name'],
                     'specification' => $goods['model'] ?? '', //规格型号 
@@ -109,46 +164,45 @@ class FpYun
                     'taxRate' => $goods['tax_rate'] ?? '', //税率
                     'units' => $goods['unit'] ?? '', //单位 
                     'lineProperty' => $lineProperty, //行性质，1折扣行(折扣行必须紧跟被折扣的正常商品行)，2正常商品行 
-                    'amount' => $goods['amount']?? '', //金额 
-                   
-                ];  
+                    'amount' => $goods['amount'] ?? '', //金额 
+
+                ];
                 $row['revenueCode'] = $goods['tax_scope_code']; //税收分类编码 
                 $new_goods[] = $row;
             }
-            $invoice_type = $invoice['invoice_type']?? '';
+            $invoice_type = $invoice['invoice_type'] ?? '';
             if ($invoice_type == '1') {
                 $invoice_type = '01'; //专票
             } elseif ($invoice_type == '2') {
                 $invoice_type = '02'; //普票
             }
             $body = [
-                'serialNo' => $invoice['custom_invoice_no'], 
+                'serialNo' => $invoice['custom_invoice_no'],
                 'invoiceType' => $invoice_type, // 01-数字化电子专票，02-数字化电子普票 
                 'buyerName' => $invoice['buyer_name'],
                 'buyerTaxpayerId' => $invoice['buyer_tax_no'] ?? '',
                 'sellerName' => $invoice['seller_name'] ?? '',
-                'sellerTaxpayerId' => $invoice['seller_tax_no'] ?? '', 
-                'sellerBank'=> $invoice['seller_bank']?? '', // 收款银行
-                'sellerBankAccount'=> $invoice['seller_bank_account']?? '', // 收款银行账号
-                'sellerAddress'=> $invoice['seller_address']?? '', // 收款方地址
+                'sellerTaxpayerId' => $invoice['seller_tax_no'] ?? '',
+                'sellerBank' => $invoice['seller_bank'] ?? '', // 收款银行
+                'sellerBankAccount' => $invoice['seller_bank_account'] ?? '', // 收款银行账号
+                'sellerAddress' => $invoice['seller_address'] ?? '', // 收款方地址
                 'invoiceDetail' => $new_goods,
-                'buyerTel'=> $goods['buyer_tel']?? '', //购买方电话
-                'buyerAddress'=> $goods['buyer_address']?? '', //购买方地址 
+                'buyerRecipientPhone' => $invoice['buyer_tel'] ?? '',
+                'buyerRecipientMail' => $invoice['buyer_email'] ?? '',
             ];
-            $drawer = $invoice['drawer']?? '';
+            $drawer = $invoice['drawer'] ?? '';
             if ($drawer) {
                 $body['drawer'] = $drawer; //开票人
             }
-            $remark = $invoice['remark']?? '';
+            $remark = $invoice['remark'] ?? '';
             if ($remark) {
                 $body['remark'] = $remark;
             }
             $reviewer = $invoice['reviewer'] ?? '';
             if ($reviewer) {
                 $body['reviewer'] = $reviewer; //复核人
-            } 
-        } 
-        
+            }
+        }
         $response = $this->client->request('POST', $url, [
             'headers' => [
                 'Content-Type' => 'application/json',
@@ -165,11 +219,8 @@ class FpYun
         $res = json_decode($res, true);
         $message = $res['message'] ?? '';
         $status = $res['status'] ?? '';
-        pr($res);
-        exit;
         if ($status == 1) {
-            $this->serialNo = $res['data'] ?? '';
-            return $this->serialNo;
+            return $res['data'] ?? '';
         } else {
             self::$err = $message;
             if ($this->showErr) {

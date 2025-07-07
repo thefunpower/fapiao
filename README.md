@@ -1,5 +1,12 @@
 # 发票
 
+~~~
+composer require guzzlehttp/guzzle
+composer require thefunpower/fapiao
+~~~
+
+`guzzle` 为 `7.x` 版本
+
 ## 金蝶
 
 ### 开发票
@@ -8,46 +15,86 @@
 $zone = new FpYun();
 $zone->set([
    'code'=>'',//业务编码
-   'user' => '177290',
-   'appId' => 'Ceshi',
+   'user' => '',
+   'appId' => '',
    'accountId' => '',
    'appSecret' => '',
    'baseUrl' => 'https://cosmic-sandbox.piaozone.com/shhcyylqx',
 ]);
- 
 
+$zone->requestId = time();
+$zone->getAccessToken();  
+~~~
+
+创建发票
+
+~~~ 
 $invoices = [
     [
         'drawer'=>'', // 开票人，金蝶
         'reviewer'=>'', // 复核人，金蝶 
 
-        'custom_invoice_no' => '20250707001', // 自定义发票号 最长20个字符，请确保每张发票都使用唯一的发票流水号，以保证您处理回调逻辑可将发票一一对应 
+        'invoice_type' => 2, // 发票类型，1：专票，2：普票 
+
+        'custom_invoice_no' => '20250707001AA', // 自定义发票号 最长20个字符，请确保每张发票都使用唯一的发票流水号，以保证您处理回调逻辑可将发票一一对应 
         'buyer_name' => '深圳金蝶账无忧网络科技有限公司',//购买方名称
-        'buyer_tax_no' => '91440300358768292H1', // 购买方税号统一社会信用代码
+        'buyer_tax_no' => '91440300358768292H1', // 购买方税号统一社会信用代码，buyer_type=1时必填
 
-        'seller_name'=>'上海有限公司',  // 销方名称 
-        'seller_tax_no'=>'91T', // 销方税号 
+        'seller_name'=>'上海好齿源医疗器械有限公司',  // 销方名称 
+        'seller_tax_no'=>'91310104324439343T', // 销方税号 
 
-        'remark' => '', // 发票备注
+        'seller_bank'=>'招商银行股份有限公司', // 销方开户行
+        'seller_bank_account'=>'6228480310003648092', // 销方开户行账号
+        'seller_address'=>'上海市浦东新区浦东南路1000号', // 销方地址
+
+        'drawer'=>'开票人', // 开票人 必须
+
+        //'buyer_tel'=>'13800138000', // 购买方电话
+        'buyer_email'=>'68103403@qq.com',// 购买方邮箱
+
+        'remark' => '', // 发票备注，最长支持230个字符，无备注请传入空字符串
         'goods' => [
             [
                 'goods_name' => '货物运输费', // 货物或应税劳务名称，最长100个字符，如：货物运输费
                 'tax_scope_code' => '3070402000000000000', // 商品和服务税收编码，如：3070402000000000000，由19个数字组成
-                'amount' => '200.00',
+                'amount' => 200.00,
                 'tax_rate' => '0.13', // 税率，如：0.13
                 'discount_amount'=> 0,//折扣金额，包含整数部分、小数部分和小数点，加起来最长16个字符，最长2位小数
                 'unit' => '个', // 单位，最长10个字符，如：个
                 'quantity' => '1', // 数量，最长16个字符，最长2位小数
-                'unit_price' => '200.00', // 单价，包含整数部分、小数部分和小数点，加起来最长16个字符，最长2位小数 
+                'unit_price' => 200.00, // 单价，包含整数部分、小数部分和小数点，加起来最长16个字符，最长2位小数 
 
-                'detail_id'=>123456,// 金蝶 明细ID
             ]
         ]
     ], 
-];
-$zone->getAccessToken(); 
+]; 
 $res = $zone->createInvoice($invoices); 
 pr($res);
+~~~
+
+查寻发票
+
+~~~
+//销售方税号
+$saler_tax_no = '';
+
+//自定义单号
+$serialNo = '20250707001AA';
+
+$res = $zone->query($serialNo,$saler_tax_no);
+pr($res);
+~~~
+
+返回
+
+~~~
+Array
+(
+    [url] => https://api-dev.piaozone.com/doc/free/fileInfo/preview/nf1391878360442548224
+    [ofd] => https://api-dev.piaozone.com/doc/free/fileInfo/preview/nf1391878349784821760
+    [xml] => https://api-dev.piaozone.com/doc/free/fileInfo/preview/nf1391878344713908224
+    [invoice_number] => 22539455751772180480
+)
 ~~~
 
 
