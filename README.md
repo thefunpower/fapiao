@@ -7,7 +7,7 @@ composer require thefunpower/fapiao
 
 `guzzle` 为 `7.x` 版本
 
-## 金蝶
+## 金蝶云开票
 
 ### 开发票
 
@@ -96,6 +96,50 @@ Array
     [invoice_number] => 22539455751772180480
 )
 ~~~
+
+红冲
+
+~~~
+//取发票
+$serialNo     = '202507081516004';
+$invoiceNum   = '22545145611618979840';
+$invoice_type = 1;
+$zone->reverseInvoice($serialNo, $invoiceNum,$invoice_type,$sellerTaxpayerId);
+~~~
+
+
+`$serialNo` 流水号
+
+`$invoiceNum` 要红冲的蓝票号
+
+`$invoice_type` 1专票 2 普票
+
+`$sellerTaxpayerId` 销方税号
+
+
+查寻所有发票
+
+~~~
+$res = $zone->findAll($sellerTaxpayerId);
+~~~
+
+`$sellerTaxpayerId` 销方税号
+
+
+
+查寻部分发票
+
+~~~
+find($tax_no = '税号', $invoice_type = 2, $pageNo = 1, $pageSize = 50)
+~~~
+
+`$tax_no` 税号
+
+`$invoice_type` 发票类型，1：专票，2：普票
+
+`$pageNo` 页码，从1开始
+
+`$pageSize`  每页数量
 
 
 ## 自开票

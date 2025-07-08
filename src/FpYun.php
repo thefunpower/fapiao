@@ -43,16 +43,107 @@ class FpYun
         }
     }
     /**
-     * 分页查寻发票
-     * https://piaozone-ultimate.apifox.cn/api-146003725
+     * 红冲
+     * https://piaozone-ultimate.apifox.cn/api-146003698
+     * @param string $serialNo 流水号
+     * @param string $invoiceNum 要红冲的蓝票号
+     * @param string $invoice_type 1专票 2 普票
+     * @param string $sellerTaxpayerId 销方税号
+     * @return array $data 发票信息
      */
-    public function page($tax_no = '税号', $pageNo = 1, $pageSize = 1)
+    public function reverseInvoice($serialNo, $invoiceNum, $invoice_type = 2, $sellerTaxpayerId = '')
     {
+        if ($invoice_type == '1') {
+            $invoice_type = '01'; //专票
+        } elseif ($invoice_type == '2') {
+            $invoice_type = '02'; //普票
+        }
         $url = $this->baseUrl . '/kapi/app/sim/openApi';
         $body = [
+            'serialNo' => $serialNo,
+            'invoiceNum' => $invoiceNum,
+            'redReason' => '01',
+            'invoiceType' => $invoice_type,
+            'sellerTaxpayerId' => $sellerTaxpayerId,
+        ];
+        $response = $this->client->request('POST', $url, [
+            'headers' => [
+                'Content-Type' => 'application/json',
+                'access_token' => $this->access_token,
+            ],
+            'json' => [
+                'requestId' => $this->requestId,
+                'businessSystemCode' => $this->code,
+                'interfaceCode' => 'ALLE.INVOICE.RED',
+                'data' => base64_encode(json_encode($body)),
+            ]
+        ]);
+        $res = (string) $response->getBody();
+        $res = json_decode($res, true);
+        $message = $res['message'] ?? '';
+        $status = $res['status'] ?? '';
+        if ($status == 1) {
+            $data = $res['data'] ?? '';
+            return true;
+        } else {
+            self::$err = $message;
+            if ($this->showErr) {
+                throw new \Exception(self::$err);
+            }
+            return false;
+        }
+    }
+    /**
+     * 分页查询发票
+     * https://piaozone-ultimate.apifox.cn/api-146003725
+     * 
+     * @param string $tax_no 税号
+     * @param int $pageNo 页码，从1开始
+     * @param int $pageSize 每页数量
+     * @param bool $showFull 是否获取全部数据
+     * @return array|false 返回发票数据数组或false(失败时)
+     */
+    public function findAll($tax_no = '税号', $pageSize = 50)
+    {
+        $output = [];
+        $invoice_type = [1, 2];
+        foreach ($invoice_type as $item) {
+            $pageNoStatic[$item] = 1;
+            $flag = true;
+            while ($flag) {
+                $result = $this->find($tax_no, $item, $pageNoStatic[$item], $pageSize);
+                if ($result) {
+                    $output = array_merge($output, $result);
+                    $pageNoStatic[$item]++; // 增加页码(专票和普票
+                } else {
+                    $flag = false;
+                }
+            }
+        }
+        return $output;
+    }
+
+    /**
+     * 分页查询发票
+     * @param string $tax_no 税号
+     * @param int $invoice_type 发票类型，1：专票，2：普票
+     * @param int $pageNo 页码，从1开始
+     * @param int $pageSize 每页数量
+     */
+    public function find($tax_no = '税号', $invoice_type = 2, $pageNo = 1, $pageSize = 50)
+    {
+        if ($invoice_type == '1') {
+            $invoice_type = '01'; //专票
+        } elseif ($invoice_type == '2') {
+            $invoice_type = '02'; //普票
+        }
+        $url = $this->baseUrl . '/kapi/app/sim/openApi';
+        $pageNo = $pageNo - 1;
+        $body = [
             'sellerTaxpayerId' => $tax_no,
-            'pageNo' => $pageNo - 1,
+            'pageNo' => $pageNo,
             'pageSize' => $pageSize,
+            'invoiceType' => $invoice_type,
         ];
         $response = $this->client->request('POST', $url, [
             'headers' => [
@@ -70,24 +161,23 @@ class FpYun
         $res = json_decode($res, true);
         $message = $res['message'] ?? '';
         $status = $res['status'] ?? '';
-        pr($res);
-        exit;
         if ($status == 1) {
             $data = $res['data'] ?? '';
             $data = base64_decode($data);
             $data = json_decode($data, true);
-            return [
-                'url' => $data['invoiceFileUrl'] ?? '',
-                'ofd' => $data['ofdFileUrl'] ?? '',
-                'xml' => $data['xmlFileUrl'] ?? '',
-                'invoice_number' => $data['invoiceNum'] ?? '',
-                'data' => $data,
-            ];
+            $output = [];
+            foreach ($data as $key => $item) {
+                $output[] = [
+                    'url' => $item['invoiceFileUrl'] ?? '',
+                    'ofd' => $item['ofdFileUrl'] ?? '',
+                    'xml' => $item['xmlFileUrl'] ?? '',
+                    'invoice_number' => $item['invoiceNum'] ?? '',
+                    'data' => $item,
+                ];
+            }
+            return $output;
         } else {
             self::$err = $message;
-            if ($this->showErr) {
-                throw new \Exception(self::$err);
-            }
             return false;
         }
     }
@@ -152,10 +242,11 @@ class FpYun
         foreach ($invoices as $invoice) {
             $new_goods = [];
             foreach ($invoice['goods'] as $goods) {
-                /**
-                 * 行性质，0：正常商品行；1：折扣行[折扣行金额需为负数，它的上一行必须是被折扣行]；2：被折扣行[此商品行下一行必须是折扣行]【长度：2】
-                 */
-                $lineProperty = 2;
+                $lineProperty = 0;
+                $discount_amount = $goods['discount_amount'] ?? '';
+                if ($discount_amount > 0) {
+                    $lineProperty = 2;
+                }
                 $row = [
                     'goodsName' => $goods['goods_name'],
                     'specification' => $goods['model'] ?? '', //规格型号 
@@ -163,12 +254,17 @@ class FpYun
                     'price' => $goods['unit_price'] ?? '',
                     'taxRate' => $goods['tax_rate'] ?? '', //税率
                     'units' => $goods['unit'] ?? '', //单位 
-                    'lineProperty' => $lineProperty, //行性质，1折扣行(折扣行必须紧跟被折扣的正常商品行)，2正常商品行 
+                    'lineProperty' => $lineProperty,
                     'amount' => $goods['amount'] ?? '', //金额 
-
                 ];
                 $row['revenueCode'] = $goods['tax_scope_code']; //税收分类编码 
                 $new_goods[] = $row;
+
+                if ($discount_amount > 0) {
+                    $row['lineProperty'] = 1;
+                    $row['amount'] = bcsub(0, $discount_amount, 2);
+                    $new_goods[] = $row;
+                }
             }
             $invoice_type = $invoice['invoice_type'] ?? '';
             if ($invoice_type == '1') {
