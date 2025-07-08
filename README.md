@@ -147,6 +147,13 @@ find($tax_no = '税号', $invoice_type = 2, $pageNo = 1, $pageSize = 50)
 https://fpapi.com/
 
 
+- 创建企业
+- 创建开票人
+- 绑定开票人到企业
+- 开票
+- 红冲
+
+
 安装
 
 ~~~
