@@ -12,7 +12,7 @@ composer require thefunpower/fapiao
 ### 开发票
 
 ~~~
-$zone = new FpYun();
+$zone = new \Fapiao\FpYun();
 $zone->set([
    'code'=>'',//业务编码
    'user' => '',
@@ -152,15 +152,11 @@ https://fpapi.com/
 - 绑定开票人到企业
 - 开票
 - 红冲
-
-
-安装
+ 
 
 ~~~
-"thefunpower/fapiao": "dev-main"
-~~~ 
-
-`data/code.xlsx` 是 税收编码表,一般财务知道自己的税收编码。
+$api = new \Fapiao\FpApi($aid,$appSecret);
+~~~
 
 ### 开具多张发票示例
  
