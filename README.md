@@ -7,7 +7,7 @@ composer require thefunpower/fapiao
 
 `guzzle` 为 `7.x` 版本
 
-## 金蝶云开票
+## 金蝶云星瀚开票
 
 ### 开发票
 
